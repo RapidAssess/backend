@@ -10,9 +10,6 @@ load_dotenv()
 
 # Access the MONGO_URI variable
 
-
-
-
 app = Flask(__name__)
 
 # MongoDB URI
