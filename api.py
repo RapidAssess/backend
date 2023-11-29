@@ -1,23 +1,18 @@
-from flask import Flask, jsonify
+from flask import Flask, request, jsonify, Response
 from pymongo import MongoClient
-from flask import Flask, request, jsonify
-import pymongo
+from gridfs import GridFS
 from dotenv import load_dotenv
 import os
+import base64
 
 # Load environment variables from .env file
 load_dotenv()
-
-# Access the MONGO_URI variable
-
-
-
 
 app = Flask(__name__)
 
 # MongoDB URI
 mongo_uri = os.getenv("MONGO_URI")
-print("MONGO_URI:", mongo_uri)
+
 
 # Connect to the MongoDB server
 client = MongoClient(mongo_uri)
@@ -28,7 +23,58 @@ db = client["RapidPrototype"]
 # Access the "backend" collection within the database
 collection = db["backend"]
 
-app = Flask(__name__)
+# Initialize GridFS for file storage
+fs = GridFS(db)
+
+@app.route('/image', methods=['POST'])
+def insert_img():
+    try:
+        if 'image' in request.files:
+            image = request.files['image']
+            
+            # Save the image to GridFS
+            image_id = fs.put(image, filename=image.filename)
+
+            # Insert the image file ID 
+            result = collection.insert_one({'image_file_id': image_id, 'ifImage': 'Yes'})
+            return jsonify({"message": "Image uploaded successfully"})
+        else:
+            return jsonify({"error": "No image file provided in the request"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
+@app.route('/allimg', methods=['GET'])
+def all_img():
+    try:
+        
+        image_documents = list(collection.find({"ifImage": "Yes"}))
+
+        
+        image_data_list = []
+
+        
+        for doc in image_documents:
+            image_file = fs.get(doc['image_file_id'])
+            if image_file:
+               
+                image_data = image_file.read()
+                
+                # Encode the binary data (image) as Base64 (text format)
+                # for transfer in JSON responses.
+                # UTF-8 string works with JSON
+                base64_data = base64.b64encode(image_data).decode('utf-8')
+                
+                image_data_list.append(base64_data)
+
+        
+        return jsonify({"image_data": image_data_list})
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
 
 @app.route('/users', methods=['POST'])
 def create_user():
