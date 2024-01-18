@@ -31,11 +31,16 @@ def insert_img():
     try:
         if 'image' in request.files:
             image = request.files['image']
+
+          
+            image_path = 'img.jpg'
+            image.save(image_path)
+
             
-            # Save the image to GridFS
+            image.seek(0)  # file pointer to the beginning of the file
             image_id = fs.put(image, filename=image.filename)
 
-            # Insert the image file ID 
+            # Insert the image file ID into MongoDB
             result = collection.insert_one({'image_file_id': image_id, 'ifImage': 'Yes'})
             return jsonify({"message": "Image uploaded successfully"})
         else:
@@ -43,6 +48,27 @@ def insert_img():
 
     except Exception as e:
         return jsonify({"error": str(e)})
+
+
+@app.route('/saveAI', methods=['POST'])
+def ai_todb():
+    try:
+        file_path = 'pathoverlay.png'
+
+        # Check if the file exists
+        if not os.path.exists(file_path):
+            return jsonify({"error": "File not found"})
+
+        with open(file_path, 'rb') as image_file:
+            image_id = fs.put(image_file, filename='pathoverlay.png')
+            result = collection.insert_one({'image_file_id': image_id, 'ifImage': 'Yes'})
+            return jsonify({"message": "Image uploaded successfully"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
+
 
 
 @app.route('/allimg', methods=['GET'])
@@ -95,3 +121,8 @@ def create_user():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+
+
+
+
