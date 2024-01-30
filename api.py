@@ -100,9 +100,62 @@ def all_img():
     except Exception as e:
         return jsonify({"error": str(e)})
 
+# any param can be passed for delete, returns only message
+# needs cookie/user token implemented
+# TO DO: check if user exists
+@app.route('/deleteuser', methods=['POST'])
+def delete_user():
+    try:
+        # Request by anything
+        data = request.json
 
+        # delete and store in result
+        collection.delete_one(data)
+        # return success message
+        return jsonify({"msg": "User deleted successfully"})
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
-@app.route('/users', methods=['POST'])
+# updates by username, all params must be passed. returns message
+# needs cookie/user token implemented
+# TO DO: check if user exists
+#        allow only some params to be passed
+@app.route('/edituser', methods=['POST'])
+def edit_user():
+    try:
+        # user to update
+        # format: {"update":username to update, "username": ... "password": new password }
+        data = request.json
+
+        # update
+        collection.update_one({'username':data["update"]},{"$set":{'name':data["name"], 'username':data["username"], 'password':data["password"]}})
+
+        return jsonify({"msg": "User update successful"})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+# primarily for development
+# user can be read by anything, returns all user information
+# TO DO: check if user exists
+@app.route('/readuser', methods=['GET'])
+def read_user() :
+    try:
+        # params for user
+        data = request.json
+
+        result = collection.find_one(data)
+
+        # return all user info
+        user = str(result)
+
+        return jsonify({"user": user, "msg": "User loaded successfully"})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+# this is basically just register 
+# make sure to pass name, username, and password
+# TO DO: check for duplicate username
+@app.route('/adduser', methods=['POST'])
 def create_user():
     try:
         # Get JSON data from the request
