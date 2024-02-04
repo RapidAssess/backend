@@ -4,6 +4,7 @@ from gridfs import GridFS
 from dotenv import load_dotenv
 import os
 import base64
+from bson.objectid import ObjectId
 
 # Load environment variables from .env file
 load_dotenv()
@@ -26,98 +27,198 @@ collection = db["backend"]
 # Initialize GridFS for file storage
 fs = GridFS(db)
 
+@app.route('/saveAI', methods=['POST'])
+def ai_todb():
+    try:
+        file_path = 'pathoverlay.png'
+        data = request.json  
+        imageID = data.get('imageID')  # Need the original ID 
+
+        if not os.path.exists(file_path):
+            return jsonify({"error": "File not found"})
+
+        with open(file_path, 'rb') as image_file:
+            # Get ID from the grid
+            image_file_id = fs.put(image_file, filename='pathoverlay.png')
+
+            
+            result = collection.insert_one({
+                'image_file_id': image_file_id,  
+                'imageID': imageID  
+            })
+
+            
+            return jsonify({
+                "message": "AI Image uploaded successfully",
+                "aiID": str(result.inserted_id),  # MongoDB  ID 
+                "image_file_id": str(image_file_id),  # GridFS file ID
+                "imageID": imageID
+            })
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route('/updateAI/<string:aiID>', methods=['PUT'])
+def update_ai(aiID):
+    try:
+        data = request.json
+        result = collection.update_one(
+            {"_id": ObjectId(aiID)},
+            {"$set": data}  
+        )
+
+        if result.modified_count:
+            return jsonify({"message": "AI Image metadata updated successfully"})
+        else:
+            return jsonify({"error": "No update performed"})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
+
+
+
+
+@app.route('/update/<string:image_id>', methods=['PUT'])
+def update_image(image_id):
+    try:
+        
+        data = request.json
+
+        
+        result = collection.update_one(
+            {"_id": ObjectId(image_id), 'ifImage': 'Yes'},
+            {"$set": data}
+        )
+
+        if result.modified_count > 0:
+            return jsonify({"message": "Image updated successfully"})
+        else:
+            return jsonify({"error": "No update performed"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
+@app.route('/deleteAI/<string:aiID>', methods=['DELETE'])
+def delete_aiimage(aiID):
+    try:
+        document = collection.find_one_and_delete({"_id": ObjectId(aiID)})
+        if document:
+            fs.delete(document['image_file_id'])  # Delete the image file from GridFS
+            return jsonify({"message": "AI Image deleted successfully"})
+        else:
+            return jsonify({"error": "No update performed"})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
+
+@app.route('/delete/<string:image_id>', methods=['DELETE'])
+def delete_image(image_id):
+    try:
+        
+        document = collection.find_one_and_delete({"_id": ObjectId(image_id)})
+        if document:
+            fs.delete(document['image_file_id'])
+            return jsonify({"message": "Image deleted successfully"})
+        else:
+            return jsonify({"error": "Image not found"})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
 @app.route('/image', methods=['POST'])
 def insert_img():
     try:
         if 'image' in request.files:
             image = request.files['image']
+            name = request.form.get("name", "")  # Get the name from the request
+            description = request.form.get("description", "")  # Get the description from the request
 
-          
+            # Save the uploaded image to a file temporarily
             image_path = 'img.jpg'
             image.save(image_path)
 
-            
-            image.seek(0)  # file pointer to the beginning of the file
-            image_id = fs.put(image, filename=image.filename)
+            # GridFS file and insert to MongoDB 
+            with open(image_path, 'rb') as image_file:
+                image_id = fs.put(image_file, filename=image.filename, name=name, description=description)
 
-            # Insert the image file ID into MongoDB
-            result = collection.insert_one({'image_file_id': image_id, 'ifImage': 'Yes'})
-            return jsonify({"message": "Image uploaded successfully"})
+            # Insert the image file ID into the 'backend' collection
+            result = collection.insert_one({'image_file_id': image_id, 'ifImage': 'Yes', 'name': name, 'description': description})
+
+            
+
+            # Return the image document ID in the response
+            return jsonify({"message": "Image uploaded successfully", "imageID": str(result.inserted_id)})
         else:
             return jsonify({"error": "No image file provided in the request"})
 
     except Exception as e:
         return jsonify({"error": str(e)})
 
-
-@app.route('/saveAI', methods=['POST'])
-def ai_todb():
+@app.route('/aiimages/<string:imageID>', methods=['GET'])
+def get_images_by_imageID(imageID):
     try:
-        file_path = 'pathoverlay.png'
+        
+        metadata_docs = list(collection.find({"imageID": imageID}))
+        if not metadata_docs:
+            return jsonify({"error": "No images found with the provided imageID"})
 
-        # Check if the file exists
-        if not os.path.exists(file_path):
-            return jsonify({"error": "File not found"})
+        images = []
+        for doc in metadata_docs:
+            try:
+                file_id = doc['image_file_id']
+                grid_out = fs.get(file_id)
+                image_data = grid_out.read()
+                encoded_image = base64.b64encode(image_data).decode('utf-8')
+                
+                images.append({
+                    "aiID": str(doc['_id']),
+                    "imageID": doc['imageID'],
+                    "aiData": encoded_image,  # Sending the ai image as a base64-encoded string
+                    "name": doc.get("name", ""),
+                    "description": doc.get("description", "")
+                })
+            except Exception as e:
+                print(f"Error retrieving file from GridFS: {e}")
+                
 
-        with open(file_path, 'rb') as image_file:
-            image_id = fs.put(image_file, filename='pathoverlay.png')
-            result = collection.insert_one({'image_file_id': image_id, 'ifImage': 'Yes'})
-            return jsonify({"message": "Image uploaded successfully"})
-
+        return jsonify({
+            "message": f"Retrieved {len(images)} images successfully",
+            "images": images
+        })
     except Exception as e:
         return jsonify({"error": str(e)})
 
 
-
-
-
-@app.route('/allimg', methods=['GET'])
-def all_img():
+@app.route('/images', methods=['GET'])
+def get_all_images():
     try:
-        
         image_documents = list(collection.find({"ifImage": "Yes"}))
-
-        
         image_data_list = []
 
-        
         for doc in image_documents:
             image_file = fs.get(doc['image_file_id'])
             if image_file:
-               
                 image_data = image_file.read()
-                
-                # Encode the binary data (image) as Base64 (text format)
-                # for transfer in JSON responses.
-                # UTF-8 string works with JSON
                 base64_data = base64.b64encode(image_data).decode('utf-8')
-                
-                image_data_list.append(base64_data)
+                image_data_list.append({
+                    "imageID": str(doc['_id']),  # MongoDB-generated _id as imageID
+                    "image_file_id": str(doc['image_file_id']),  # Include the GridFS file ID
+                    "data": base64_data,
+                    "name": doc.get("name", ""),
+                    "description": doc.get("description", "")
+                })
 
-        
-        return jsonify({"image_data": image_data_list})
+        return jsonify({"images": image_data_list})
 
     except Exception as e:
         return jsonify({"error": str(e)})
 
 
 
-@app.route('/users', methods=['POST'])
-def create_user():
-    try:
-        # Get JSON data from the request
-        data = request.json
 
-        # Insert the data into the "backend" collection
-        result = collection.insert_one(data)
-
-        # Get the inserted user's ID
-        new_user_id = str(result.inserted_id)
-
-        # Return a JSON response
-        return jsonify({'id': new_user_id, 'msg': 'User added successfully'})
-    except Exception as e:
-        return jsonify({'error': str(e)})
 
 if __name__ == '__main__':
     app.run(debug=True)
