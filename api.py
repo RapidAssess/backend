@@ -101,42 +101,76 @@ def all_img():
         return jsonify({"error": str(e)})
 
 # any param can be passed for delete, returns only message
-# needs cookie/user token implemented
-# TO DO: check if user exists
+# recomment deleting by username, since is is unique
+# needs JWT implemented
 @app.route('/deleteuser', methods=['POST'])
 def delete_user():
     try:
         # Request by anything
         data = request.json
-
-        # delete and store in result
-        collection.delete_one(data)
-        # return success message
-        return jsonify({"msg": "User deleted successfully"})
+        result = collection.find_one(data)
+        if result :
+            # delete and store in result
+            collection.delete_one(data)
+            # return success message
+            return jsonify({"msg": "User deleted successfully"})
+        
+        return jsonify({"msg": "User does not exist"})
     except Exception as e:
         return jsonify({'error': str(e)})
 
-# updates by username, all params must be passed. returns message
-# needs cookie/user token implemented
-# TO DO: check if user exists
-#        allow only some params to be passed
+# updates by username, any params can be passed. returns message
+# code to update username is commented out
+# needs JWT implemented
 @app.route('/edituser', methods=['POST'])
 def edit_user():
     try:
         # user to update
         # format: {"update":username to update, "username": ... "password": new password }
         data = request.json
+        # check if user exists
+        result = collection.find_one({"username":data["update"]})
+        if result :
+            # update
+            dict = {}
+            if "name" in data :
+                dict["name"] = data["name"]
+            # update username
+            #if "username" in data :
+            #    dict["username"] = data["username"]
+            if "password" in data :
+                dict["password"] = data["password"]
+            
+            collection.update_one({'username':data["update"]},{"$set":dict})
+            return jsonify({"msg": "User update successful"})
+        return jsonify({"msg": "User does not exist"})
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
-        # update
-        collection.update_one({'username':data["update"]},{"$set":{'name':data["name"], 'username':data["username"], 'password':data["password"]}})
+# login by username and password
+# Needs JWT
+@app.route('/login', methods=['POST'])
+def login() :
+    try :
+        data = request.json
 
-        return jsonify({"msg": "User update successful"})
+        # get the username to read
+        user = collection.find_one({'username':data['username']})
+
+        # if user exists
+        if user :
+            # password from request
+            passwordtry = data['password']
+            # compare to actual password
+            if passwordtry == user['password'] :
+                return jsonify({"user id": str(user["_id"]),"msg": "user logged in"})
+        return jsonify({"msg":"password is incorrect"})
     except Exception as e:
         return jsonify({'error': str(e)})
 
 # primarily for development
 # user can be read by anything, returns all user information
-# TO DO: check if user exists
+# comment out when deployed
 @app.route('/readuser', methods=['GET'])
 def read_user() :
     try:
@@ -154,12 +188,17 @@ def read_user() :
 
 # this is basically just register 
 # make sure to pass name, username, and password
-# TO DO: check for duplicate username
+# Needs JWT
 @app.route('/adduser', methods=['POST'])
 def create_user():
     try:
         # Get JSON data from the request
         data = request.json
+
+        # check if username already exists
+        currentusername = collection.find_one({"username":data["username"]})
+        if currentusername :
+            return jsonify({"msg":"username taken"})
 
         # Insert the data into the "backend" collection
         result = collection.insert_one(data)
