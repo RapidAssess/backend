@@ -134,6 +134,28 @@ def edit_user():
     except Exception as e:
         return jsonify({'error': str(e)})
 
+# login by username and password
+# may need to do password hashing here, but give it a try on front end
+# TO DO: user token
+@app.route('/login', methods=['POST'])
+def login() :
+    try :
+        data = request.json
+
+        # get the username to read
+        user = collection.find_one({'username':data['username']})
+
+        # if user exists
+        if user :
+            # password from request
+            passwordtry = data['password']
+            # compare to actual password
+            if passwordtry == user['password'] :
+                return jsonify({"user": str(user),"msg": "user logged in"})
+        return jsonify({"msg":"password is incorrect"})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
 # primarily for development
 # user can be read by anything, returns all user information
 # TO DO: check if user exists
@@ -154,7 +176,7 @@ def read_user() :
 
 # this is basically just register 
 # make sure to pass name, username, and password
-# TO DO: check for duplicate username
+# TO DO: check for duplicate username, password requirements?
 @app.route('/adduser', methods=['POST'])
 def create_user():
     try:
