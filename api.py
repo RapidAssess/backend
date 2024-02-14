@@ -1,14 +1,20 @@
 from flask import Flask, request, jsonify, Response
+import jwt
 from pymongo import MongoClient
 from gridfs import GridFS
 from dotenv import load_dotenv
 import os
 import base64
 
+from auth_middleware import token_required
+
 # Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
+SECRET_KEY = os.environ.get('SECRET_KEY') or 'this is a secret'
+#print(SECRET_KEY)
+app.config['SECRET_KEY'] = SECRET_KEY
 
 # MongoDB URI
 mongo_uri = os.getenv("MONGO_URI")
@@ -104,14 +110,15 @@ def all_img():
 # recomment deleting by username, since is is unique
 # needs JWT implemented
 @app.route('/deleteuser', methods=['POST'])
-def delete_user():
+@token_required
+def delete_user(current_user):
     try:
         # Request by anything
-        data = request.json
-        result = collection.find_one(data)
+        #data = request.json
+        result = collection.find_one({"_id":current_user['_id']})
         if result :
             # delete and store in result
-            collection.delete_one(data)
+            collection.delete_one(result)
             # return success message
             return jsonify({"msg": "User deleted successfully"})
         
@@ -119,36 +126,37 @@ def delete_user():
     except Exception as e:
         return jsonify({'error': str(e)})
 
-# updates by username, any params can be passed. returns message
+# updates name and password, returns message
 # code to update username is commented out
 # needs JWT implemented
 @app.route('/edituser', methods=['POST'])
-def edit_user():
+@token_required
+def edit_user(current_user):
     try:
         # user to update
         # format: {"update":username to update, "username": ... "password": new password }
         data = request.json
         # check if user exists
-        result = collection.find_one({"username":data["update"]})
+        result = collection.find_one({"_id":current_user["_id"]})
         if result :
             # update
             dict = {}
             if "name" in data :
                 dict["name"] = data["name"]
-            # update username
+            # update username (commented since it should be unique and unchanged)
             #if "username" in data :
             #    dict["username"] = data["username"]
             if "password" in data :
                 dict["password"] = data["password"]
             
-            collection.update_one({'username':data["update"]},{"$set":dict})
+            collection.update_one({'username':current_user["username"]},{"$set":dict})
             return jsonify({"msg": "User update successful"})
         return jsonify({"msg": "User does not exist"})
     except Exception as e:
         return jsonify({'error': str(e)})
 
 # login by username and password
-# Needs JWT
+# Returns user token
 @app.route('/login', methods=['POST'])
 def login() :
     try :
@@ -163,7 +171,12 @@ def login() :
             passwordtry = data['password']
             # compare to actual password
             if passwordtry == user['password'] :
-                return jsonify({"user id": str(user["_id"]),"msg": "user logged in"})
+                user["token"] = jwt.encode(
+                    {"user_id": str(user["_id"])},
+                    app.config["SECRET_KEY"],
+                    algorithm="HS256"
+                )
+                return jsonify({"user_token": str(user['token']),"msg": "user logged in"})
         return jsonify({"msg":"password is incorrect"})
     except Exception as e:
         return jsonify({'error': str(e)})
@@ -188,7 +201,7 @@ def read_user() :
 
 # this is basically just register 
 # make sure to pass name, username, and password
-# Needs JWT
+# Returns a user token
 @app.route('/adduser', methods=['POST'])
 def create_user():
     try:
@@ -201,13 +214,17 @@ def create_user():
             return jsonify({"msg":"username taken"})
 
         # Insert the data into the "backend" collection
-        result = collection.insert_one(data)
-
-        # Get the inserted user's ID
-        new_user_id = str(result.inserted_id)
+        collection.insert_one(data)
+        user = collection.find_one(data)
+        # Gen token
+        user["token"] = jwt.encode(
+            {"user_id": str(user["_id"])},
+            app.config["SECRET_KEY"],
+            algorithm="HS256"
+        )
 
         # Return a JSON response
-        return jsonify({'id': new_user_id, 'msg': 'User added successfully'})
+        return jsonify({'user_token': str(user['token']), 'msg': 'User added successfully'})
     except Exception as e:
         return jsonify({'error': str(e)})
 
