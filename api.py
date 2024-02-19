@@ -6,6 +6,9 @@ from dotenv import load_dotenv
 import os
 import base64
 
+
+from auth_middleware import token_required
+
 from bson.objectid import ObjectId
 
 from flask_cors import CORS
@@ -14,12 +17,13 @@ from bson.objectid import ObjectId
 
 from auth_middleware import token_required
 
-
 # Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
+
 CORS(app)
+
 SECRET_KEY = os.environ.get('SECRET_KEY') or 'this is a secret'
 #print(SECRET_KEY)
 app.config['SECRET_KEY'] = SECRET_KEY
@@ -254,31 +258,6 @@ def get_all_images():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-
-
-
-
-
-# any param can be passed for delete, returns only message
-# recomment deleting by username, since is is unique
-# needs JWT implemented
-@app.route('/deleteuser', methods=['POST'])
-@token_required
-def delete_user(current_user):
-    try:
-        # Request by anything
-        #data = request.json
-        result = collection.find_one({"_id":current_user['_id']})
-        if result :
-            # delete and store in result
-            collection.delete_one(result)
-            # return success message
-            return jsonify({"msg": "User deleted successfully"})
-        
-        return jsonify({"msg": "User does not exist"})
-    except Exception as e:
-        return jsonify({'error': str(e)})
-
 # updates name and password, returns message
 # code to update username is commented out
 # needs JWT implemented
@@ -304,6 +283,26 @@ def edit_user(current_user):
             
             collection.update_one({'username':current_user["username"]},{"$set":dict})
             return jsonify({"msg": "User update successful"})
+        return jsonify({"msg": "User does not exist"})
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+# any param can be passed for delete, returns only message
+# recomment deleting by username, since is is unique
+# needs JWT implemented
+@app.route('/deleteuser', methods=['POST'])
+@token_required
+def delete_user(current_user):
+    try:
+        # Request by anything
+        #data = request.json
+        result = collection.find_one({"_id":current_user['_id']})
+        if result :
+            # delete and store in result
+            collection.delete_one(result)
+            # return success message
+            return jsonify({"msg": "User deleted successfully"})
+        
         return jsonify({"msg": "User does not exist"})
     except Exception as e:
         return jsonify({'error': str(e)})
