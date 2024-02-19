@@ -5,15 +5,15 @@ from gridfs import GridFS
 from dotenv import load_dotenv
 import os
 import base64
-<<<<<<< HEAD
+
 from bson.objectid import ObjectId
-=======
+
 from flask_cors import CORS
 
 from bson.objectid import ObjectId
 
 from auth_middleware import token_required
->>>>>>> userstuffJWT
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -148,7 +148,7 @@ def insert_img():
             image = request.files['image']
             name = request.form.get("name", "")  # Get the name from the request
             description = request.form.get("description", "")  # Get the description from the request
-<<<<<<< HEAD
+
 
             # Save the uploaded image to a file temporarily
             image_path = 'img.jpg'
@@ -171,7 +171,7 @@ def insert_img():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-=======
+
 
             # Save the uploaded image to a file temporarily
             image_path = 'img.jpg'
@@ -194,7 +194,7 @@ def insert_img():
     except Exception as e:
         return jsonify({"error": str(e)})
 
->>>>>>> userstuffJWT
+
 @app.route('/aiimages/<string:imageID>', methods=['GET'])
 def get_images_by_imageID(imageID):
     try:
@@ -256,9 +256,9 @@ def get_all_images():
 
 
 
-<<<<<<< HEAD
 
-=======
+
+
 # any param can be passed for delete, returns only message
 # recomment deleting by username, since is is unique
 # needs JWT implemented
@@ -380,7 +380,7 @@ def create_user():
         return jsonify({'user_token': str(user['token']), 'msg': 'User added successfully'})
     except Exception as e:
         return jsonify({'error': str(e)})
->>>>>>> userstuffJWT
+
 
 if __name__ == '__main__':
     app.run(debug=True)
